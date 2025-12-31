@@ -1,38 +1,61 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, List, Plus, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Calendar, List, Plus, Clock, Trash2 } from 'lucide-react';
 import { Lunar } from 'lunar-javascript';
 import './globals.scss';
+// --- TYPE DEFINITIONS ---
 type EventType = 'work' | 'personal' | 'health';
 interface MyEvent {
   id: number;
   title: string;
-  date: string;
+  date: string; // YYYY-MM-DD
   time: string;
   type: EventType;
 }
 
 export default function CalendarApp() {
+  // --- STATE ---
   const [activeTab, setActiveTab] = useState<'month' | 'schedule'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // Dữ liệu mẫu (Đủ 3 loại để test màu)
-  const [events, setEvents] = useState<MyEvent[]>([
-    { id: 1, title: 'Họp Team', date: '2025-01-05', time: '09:00', type: 'work' },
-    { id: 2, title: 'Đá bóng', date: '2025-01-06', time: '17:30', type: 'health' },
-    { id: 3, title: 'Đi nhậu', date: '2025-01-08', time: '19:00', type: 'personal' },
-    { id: 4, title: 'Deadline dự án', date: '2025-01-05', time: '14:00', type: 'work' }, // Ngày 05 có 2 sự kiện
-  ]);
+  // Dữ liệu ban đầu rỗng, sẽ được nạp từ LocalStorage sau
+  const [events, setEvents] = useState<MyEvent[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false); // Cờ kiểm tra đã load xong chưa
 
   // Form State
   const [formTitle, setFormTitle] = useState('');
   const [formTime, setFormTime] = useState('09:00');
   const [formType, setFormType] = useState<EventType>('work');
 
-  // Logic Helper
+  // --- 1. LOGIC LƯU TRỮ (LOCAL STORAGE) ---
+  
+  // Load dữ liệu khi App vừa mở
+  useEffect(() => {
+    const savedData = localStorage.getItem('my-calendar-data');
+    if (savedData) {
+      setEvents(JSON.parse(savedData));
+    } else {
+      // Nếu chưa có dữ liệu (lần đầu dùng), tạo vài data mẫu
+      const mockData: MyEvent[] = [
+        { id: 1, title: 'Cài đặt App thành công', date: new Date().toISOString().split('T')[0], time: '08:00', type: 'work' }
+      ];
+      setEvents(mockData);
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // Tự động Lưu mỗi khi biến 'events' thay đổi
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('my-calendar-data', JSON.stringify(events));
+    }
+  }, [events, isLoaded]);
+
+
+  // --- 2. LOGIC LỊCH ---
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
@@ -40,7 +63,7 @@ export default function CalendarApp() {
   const handleNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
 
   const handleSaveEvent = () => {
-    if (!formTitle) return alert('Nhập nội dung đi bạn!');
+    if (!formTitle) return alert('Vui lòng nhập nội dung!');
     const newEvent: MyEvent = {
       id: Date.now(),
       title: formTitle,
@@ -48,11 +71,22 @@ export default function CalendarApp() {
       time: formTime,
       type: formType,
     };
-    setEvents([...events, newEvent]);
+    
+    // Thêm vào đầu danh sách
+    setEvents(prev => [...prev, newEvent]);
+    
+    // Reset & Đóng modal
     setIsModalOpen(false);
     setFormTitle('');
   };
 
+  const handleDeleteEvent = (id: number) => {
+    if(confirm('Bạn có chắc muốn xóa lịch này?')) {
+      setEvents(prev => prev.filter(e => e.id !== id));
+    }
+  };
+
+  // --- 3. RENDER UI ---
   const renderCalendarGrid = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -65,41 +99,41 @@ export default function CalendarApp() {
       days.push(<div key={`empty-${i}`} className="day-cell empty"></div>);
     }
 
-    // Các ngày trong tháng
+    // Render ngày
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const isSelected = dateStr === selectedDateStr;
       const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
       
-      // Tìm sự kiện trong ngày này
       const dailyEvents = events.filter(e => e.date === dateStr);
       const hasEvent = dailyEvents.length > 0;
       
-      // Xác định loại sự kiện để tô màu chấm (Lấy loại của sự kiện đầu tiên nếu có nhiều cái)
+      // Lấy màu của sự kiện đầu tiên để tô nền
       let typeClass = '';
-      if (hasEvent) {
-        typeClass = `type-${dailyEvents[0].type}`; 
-      }
+      if (hasEvent) typeClass = `type-${dailyEvents[0].type}`;
       
+      // @ts-ignore
       const lunarDate = Lunar.fromDate(new Date(year, month, day));
 
       days.push(
         <div
           key={day}
           onClick={() => setSelectedDateStr(dateStr)}
-          className={`day-cell ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${hasEvent ? 'has-event' : ''} ${typeClass}`}
+          className={`day-cell ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${typeClass}`}
         >
           <span className="solar">{day}</span>
           <span className="lunar">{lunarDate.getDay()}/{lunarDate.getMonth()}</span>
-          {/* Dấu chấm sẽ tự đổi màu nhờ class typeClass */}
-          <div className="dot"></div>
         </div>
       );
     }
     return days;
   };
 
+  // Lọc sự kiện cho ngày đang chọn
   const filteredEvents = events.filter(e => e.date === selectedDateStr);
+
+  // Nếu chưa load xong dữ liệu thì chưa hiển thị gì để tránh giật
+  if (!isLoaded) return null;
 
   return (
     <div className="app-container">
@@ -115,6 +149,7 @@ export default function CalendarApp() {
           </button>
         </div>
 
+        {/* --- TAB THÁNG --- */}
         {activeTab === 'month' && (
           <div className="tab-content animate-fade">
             <div className="card">
@@ -137,25 +172,18 @@ export default function CalendarApp() {
               </h4>
               {filteredEvents.length > 0 ? (
                 filteredEvents.map(evt => (
-                  <div key={evt.id} className="event-item">
-                    <div>
-                      <h4>{evt.title}</h4>
-                      <div className="time"><Clock size={12}/> {evt.time}</div>
-                    </div>
-                    <span className={`tag ${evt.type}`}>
-                      {evt.type === 'work' ? 'Công Việc' : evt.type === 'health' ? 'Sức Khoẻ' : 'Cá Nhân'}
-                    </span>
-                  </div>
+                  <EventItem key={evt.id} evt={evt} onDelete={() => handleDeleteEvent(evt.id)} />
                 ))
               ) : (
                 <div style={{textAlign:'center', padding:20, color:'#9ca3af', fontStyle:'italic', border:'1px dashed #e5e7eb', borderRadius:12}}>
-                  Chưa có lịch trình
+                  Không có lịch trình
                 </div>
               )}
             </div>
           </div>
         )}
 
+        {/* --- TAB LỊCH TRÌNH --- */}
         {activeTab === 'schedule' && (
           <div className="tab-content animate-fade">
             <div className="card">
@@ -164,15 +192,7 @@ export default function CalendarApp() {
                 value={selectedDateStr} onChange={(e) => setSelectedDateStr(e.target.value)} />
             </div>
              {filteredEvents.map(evt => (
-                <div key={evt.id} className="event-item">
-                  <div>
-                    <h4>{evt.title}</h4>
-                    <div className="time"><Clock size={12}/> {evt.time}</div>
-                  </div>
-                  <span className={`tag ${evt.type}`}>
-                    {evt.type === 'work' ? 'Công Việc' : evt.type === 'health' ? 'Sức Khoẻ' : 'Cá Nhân'}
-                  </span>
-                </div>
+                <EventItem key={evt.id} evt={evt} onDelete={() => handleDeleteEvent(evt.id)} />
               ))}
               {filteredEvents.length === 0 && <div style={{textAlign:'center', padding:20, color:'#9ca3af'}}>Ngày này rảnh rỗi</div>}
           </div>
@@ -181,6 +201,7 @@ export default function CalendarApp() {
 
       <button className="fab-btn" onClick={() => setIsModalOpen(true)}><Plus size={28} /></button>
 
+      {/* --- MODAL --- */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -218,3 +239,24 @@ export default function CalendarApp() {
     </div>
   );
 }
+
+// Component con hiển thị 1 dòng (Đã tách ra cho gọn)
+const EventItem = ({ evt, onDelete }: { evt: MyEvent, onDelete: () => void }) => {
+  return (
+    <div className="event-item">
+      <div style={{flex:1}}>
+        <h4>{evt.title}</h4>
+        <div className="time"><Clock size={12}/> {evt.time}</div>
+      </div>
+      <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:8}}>
+        <span className={`tag ${evt.type}`}>
+          {evt.type === 'work' ? 'Công Việc' : evt.type === 'health' ? 'Sức Khoẻ' : 'Cá Nhân'}
+        </span>
+        {/* Nút xóa nhỏ */}
+        <button onClick={onDelete} style={{border:'none', background:'none', color:'#ef4444', cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:3}}>
+          <Trash2 size={14}/> Xóa
+        </button>
+      </div>
+    </div>
+  );
+};
