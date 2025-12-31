@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    apple: '/apple-icon.png'
+    apple: '/Calendar.png'
   },
 };
 
