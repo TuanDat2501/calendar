@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.4",
+    "axios": "^1.13.2",
     "lucide-react": "^0.562.0",
     "lunar-javascript": "^1.7.7",
     "next": "16.1.1",
